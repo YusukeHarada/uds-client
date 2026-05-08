@@ -8,3 +8,5 @@
 {"direction": "RX", "sid": "0x22", "raw_hex": "7F 22 31", "nrc": "0x31", "nrc_message": "Request Out Of Range", "event": "uds_rx", "timestamp": "2026-05-08T10:55:11.332859Z"}
 {"direction": "TX", "sid": "0x22", "raw_hex": "22 99 99", "event": "uds_tx", "timestamp": "2026-05-08T10:55:17.960720Z"}
 {"direction": "RX", "sid": "0x22", "raw_hex": "7F 22 31", "nrc": "0x31", "nrc_message": "Request Out Of Range", "event": "uds_rx", "timestamp": "2026-05-08T10:55:17.961202Z"}
+{"direction": "TX", "sid": "0x22", "raw_hex": "22 F1 90", "event": "uds_tx", "timestamp": "2026-05-08T20:45:22.179601Z"}
+{"direction": "RX", "sid": "0x22", "raw_hex": "62 F1 90 53 49 4D 56 49 4E 30 30 30 30 30 30 30 30 30 31", "event": "uds_rx", "timestamp": "2026-05-08T20:45:22.181247Z"}
