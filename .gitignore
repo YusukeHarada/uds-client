@@ -1,0 +1,40 @@
+# --- Python Specific ---
+# 実行時に生成されるバイトコード
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 仮想環境 (Virtual Environments)
+.venv/
+venv/
+env/
+ENV/
+
+# パッケージ配布用
+dist/
+build/
+*.egg-info/
+
+# --- Logs & Runtime ---
+# test.log を含むすべてのログ
+*.log
+# uds-client の通信ログやデバッグ出力用
+pod/
+*.pid
+
+# --- Testing & Coverage ---
+# pytest や unittest のキャッシュ
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# --- Editor & OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- Environment Variables ---
+# 認証情報や環境変数（Git管理禁止）
+.env
