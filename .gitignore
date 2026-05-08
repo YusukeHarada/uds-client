@@ -18,6 +18,7 @@ build/
 # --- Logs & Runtime ---
 # test.log を含むすべてのログ
 *.log
+uds_log.json
 # uds-client の通信ログやデバッグ出力用
 pod/
 *.pid
