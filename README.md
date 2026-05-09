@@ -39,19 +39,73 @@ python gui_main.py
 
 接続設定画面でログファイルパスとログレベルを指定できます。ログはJSON Lines形式で出力されます。
 
-### CLI（0x22 ReadDataByIdentifierのみ）
+### CLI
+
+サブコマンド方式でSIDを指定して実行します。
 
 ```bash
-python main.py --ip 192.168.0.10 --did F190 --log DEBUG
+# 書式
+python main.py --ip <IP> [--port <PORT>] [--log LEVEL] [--logfile FILE] <サブコマンド> [引数]
 ```
+
+#### 共通オプション
 
 | オプション | 説明 | デフォルト |
 |---|---|---|
 | `--ip` | ECU IPアドレス | 必須 |
 | `--port` | DoIPポート | 13400 |
-| `--did` | DID (hex) 例: F190 | 必須 |
 | `--log` | ログレベル DEBUG/INFO/WARNING | INFO |
 | `--logfile` | ログ出力ファイル | uds_log.json |
+
+#### サブコマンド一覧
+
+```bash
+# 0x22 ReadDataByIdentifier
+python main.py --ip 192.168.0.10 rdbi F190
+
+# 0x2E WriteDataByIdentifier
+python main.py --ip 192.168.0.10 wdbi F190 --data 4E455756494E30303030303030303031
+
+# 0x10 DiagnosticSessionControl
+python main.py --ip 192.168.0.10 session 03
+
+# 0x3E TesterPresent
+python main.py --ip 192.168.0.10 tester-present
+python main.py --ip 192.168.0.10 tester-present --suppress
+
+# 0x11 ECUReset
+python main.py --ip 192.168.0.10 reset hard
+python main.py --ip 192.168.0.10 reset soft
+
+# 0x14 ClearDiagnosticInformation
+python main.py --ip 192.168.0.10 clear-dtc                   # 全DTC消去
+python main.py --ip 192.168.0.10 clear-dtc --group 012345    # グループ指定
+
+# 0x19 ReadDTCInformation
+python main.py --ip 192.168.0.10 read-dtc --subfn 02 --mask FF
+python main.py --ip 192.168.0.10 read-dtc --subfn 0a
+
+# 0x31 RoutineControl
+python main.py --ip 192.168.0.10 routine 01 0201   # start
+python main.py --ip 192.168.0.10 routine 02 0201   # stop
+python main.py --ip 192.168.0.10 routine 03 0201   # requestResults
+```
+
+#### ヘルプ
+
+```bash
+python main.py --help
+python main.py rdbi --help
+python main.py read-dtc --help
+```
+
+#### 終了コード
+
+| コード | 意味 |
+|---|---|
+| 0 | 成功 |
+| 1 | 接続エラー / 引数エラー |
+| 2 | NRC応答（ECUがエラーを返した） |
 
 ---
 
@@ -71,11 +125,13 @@ python ecu_simulator.py
 python gui_main.py
 
 # CLIで確認する場合
-python main.py --ip 127.0.0.1 --did F190 --log DEBUG
+python main.py --ip 127.0.0.1 rdbi F190
 # → [OK]  DID=0xf190  Data=53 49 4D 56 49 4E ...
 
-python main.py --ip 127.0.0.1 --did 1234 --log DEBUG
-# → [NRC] DID=0x1234  NRC=0x31  (Request Out Of Range)
+python main.py --ip 127.0.0.1 read-dtc --subfn 02
+# → [OK]  ReadDTC subfn=0x2  件数=2
+#         DTC=0x12345  status=0x8
+#         DTC=0xabcd   status=0x9
 ```
 
 ### シミュレータ対応データ
@@ -108,7 +164,7 @@ python main.py --ip 127.0.0.1 --did 1234 --log DEBUG
 
 ```bash
 python ecu_simulator.py --port 13401
-python main.py --ip 127.0.0.1 --port 13401 --did F190
+python main.py --ip 127.0.0.1 --port 13401 rdbi F190
 ```
 
 ---
@@ -135,17 +191,17 @@ pytest tests/integration/test_integration_step2.py::TestIntegrationSessionContro
 
 # 0x11 ECUReset
 pytest tests/unit/test_ecu_reset.py -v
-pytest tests/atdd/test_step5_sids.py -v -k "ECUReset"
+pytest tests/atdd/test_step5_sids.py::TestStep5ECUReset -v
 pytest tests/integration/test_integration_step5.py::TestIntegrationECUReset -v
 
 # 0x14 ClearDTC
 pytest tests/unit/test_clear_dtc.py -v
-pytest tests/atdd/test_step5_sids.py -v -k "ClearDTC"
+pytest tests/atdd/test_step5_sids.py::TestStep5ClearDTC -v
 pytest tests/integration/test_integration_step5.py::TestIntegrationClearDTC -v
 
 # 0x19 ReadDTCInformation
 pytest tests/unit/test_read_dtc_information.py -v
-pytest tests/atdd/test_step5_sids.py -v -k "ReadDTC"
+pytest tests/atdd/test_step5_sids.py::TestStep5ReadDTC -v
 pytest tests/integration/test_integration_step5.py::TestIntegrationReadDTC -v
 
 # 0x22 ReadDataByIdentifier
@@ -155,18 +211,21 @@ pytest tests/integration/test_integration_doip.py -v
 
 # 0x2E WriteDataByIdentifier
 pytest tests/unit/test_write_data_by_identifier.py -v
-pytest tests/atdd/test_step5_sids.py -v -k "WriteDataByIdentifier"
+pytest tests/atdd/test_step5_sids.py::TestStep5WriteDataByIdentifier -v
 pytest tests/integration/test_integration_step5.py::TestIntegrationWriteDataByIdentifier -v
 
 # 0x31 RoutineControl
 pytest tests/unit/test_routine_control.py -v
-pytest tests/atdd/test_step5_sids.py -v -k "RoutineControl"
+pytest tests/atdd/test_step5_sids.py::TestStep5RoutineControl -v
 pytest tests/integration/test_integration_step5.py::TestIntegrationRoutineControl -v
 
 # 0x3E TesterPresent
 pytest tests/unit/test_tester_present.py -v
 pytest tests/atdd/test_step2_session.py -v -k "tester_present"
 pytest tests/integration/test_integration_step2.py::TestIntegrationTesterPresent -v
+
+# CLI
+pytest tests/unit/test_cli.py -v
 
 # GUI
 pytest tests/atdd/test_step3_gui.py -v
@@ -213,7 +272,7 @@ cat uds_log.json | jq 'select(.nrc != null)'         # NRC発生分のみ
 ```
 uds_tool/
 ├── gui_main.py                              # GUIエントリポイント
-├── main.py                                  # CLIエントリポイント
+├── main.py                                  # CLIエントリポイント（サブコマンド方式）
 ├── ecu_simulator.py                         # ローカルテスト用ECUシミュレータ
 ├── requirements.txt
 ├── pytest.ini
@@ -226,12 +285,12 @@ uds_tool/
 │   │   ├── service_base.py                  # 共通データモデル (pydantic)
 │   │   ├── nrc.py                           # NRCコード定義・変換
 │   │   ├── read_data_by_identifier.py       # SID 0x22
+│   │   ├── write_data_by_identifier.py      # SID 0x2E
 │   │   ├── diagnostic_session_control.py    # SID 0x10
 │   │   ├── tester_present.py                # SID 0x3E
 │   │   ├── ecu_reset.py                     # SID 0x11
 │   │   ├── clear_dtc.py                     # SID 0x14
 │   │   ├── read_dtc_information.py          # SID 0x19
-│   │   ├── write_data_by_identifier.py      # SID 0x2E
 │   │   └── routine_control.py               # SID 0x31
 │   ├── protocol/
 │   │   ├── protocol_base.py                 # Strategyインターフェース
@@ -246,15 +305,16 @@ uds_tool/
     │   ├── test_step3_gui.py
     │   └── test_step5_sids.py
     ├── unit/
+    │   ├── test_cli.py
     │   ├── test_nrc.py
     │   ├── test_service_base.py
     │   ├── test_read_data_by_identifier.py
+    │   ├── test_write_data_by_identifier.py
     │   ├── test_diagnostic_session_control.py
     │   ├── test_tester_present.py
     │   ├── test_ecu_reset.py
     │   ├── test_clear_dtc.py
     │   ├── test_read_dtc_information.py
-    │   ├── test_write_data_by_identifier.py
     │   ├── test_routine_control.py
     │   └── test_uds_logger.py
     └── integration/
@@ -272,5 +332,6 @@ uds_tool/
 - [x] Step3: PySide6 GUI（ログ出力対応）
 - [ ] Step4: DoIP通信強化（再接続・タイムアウト）
 - [x] Step5: 追加SID (0x11, 0x14, 0x19, 0x2E, 0x31)
+- [x] CLI: 全SIDをサブコマンドで実行可能
 - [ ] Step6: SecurityAccess (0x27)
 - [ ] Step7: UDSonCAN対応 (ISO-TP + python-can)
