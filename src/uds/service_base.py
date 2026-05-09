@@ -42,3 +42,13 @@ class TesterPresentResult(BaseModel):
     raw_response: Optional[bytes] = None
 
     model_config = {"arbitrary_types_allowed": True}
+
+
+class SimpleResult(BaseModel):
+    """ECUReset / ClearDTC / WriteDataByIdentifier など単純なレスポンス用。"""
+    success: bool
+    nrc_code: Optional[int] = None
+    nrc_message: Optional[str] = None
+    raw_response: Optional[bytes] = None
+
+    model_config = {"arbitrary_types_allowed": True}
