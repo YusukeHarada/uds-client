@@ -3,12 +3,18 @@
 TDD + ATDDで段階的に開発するUDS診断ツールです。
 
 ## 対応プロトコル
+
 - DoIP (ISO 13400-2)
 
 ## 対応UDSサービス
-- 0x10 DiagnosticSessionControl
-- 0x22 ReadDataByIdentifier
-- 0x3E TesterPresent
+
+| SID | サービス名 |
+|---|---|
+| 0x10 | DiagnosticSessionControl |
+| 0x22 | ReadDataByIdentifier |
+| 0x3E | TesterPresent |
+
+---
 
 ## セットアップ
 
@@ -16,13 +22,21 @@ TDD + ATDDで段階的に開発するUDS診断ツールです。
 pip install -r requirements.txt
 ```
 
-## 使い方
+---
+
+## 起動方法
+
+### GUI
 
 ```bash
-python main.py --ip 192.168.0.10 --did F190 --log DEBUG --logfile uds_log.json
+python gui_main.py
 ```
 
-### オプション
+### CLI
+
+```bash
+python main.py --ip 192.168.0.10 --did F190 --log DEBUG
+```
 
 | オプション | 説明 | デフォルト |
 |---|---|---|
@@ -32,15 +46,28 @@ python main.py --ip 192.168.0.10 --did F190 --log DEBUG --logfile uds_log.json
 | `--log` | ログレベル DEBUG/INFO/WARNING | INFO |
 | `--logfile` | ログ出力ファイル | uds_log.json |
 
-## ECUシミュレータ（実ECU不要でのローカル確認）
+---
+
+## ECUシミュレータ（実ECU不要）
+
+実ECUなしでローカル確認ができます。
+
+### 手動確認（ターミナル2つ）
 
 ```bash
-# Terminal 1: シミュレータ起動
+# ターミナル1: シミュレータ起動
 python ecu_simulator.py
+```
 
-# Terminal 2: CLIで接続
+```bash
+# ターミナル2: GUI または CLI で接続
+python gui_main.py
+
 python main.py --ip 127.0.0.1 --did F190 --log DEBUG
-python main.py --ip 127.0.0.1 --did 9999 --log DEBUG   # NRC確認
+# → [OK]  DID=0xf190  Data=53 49 4D 56 49 4E ...
+
+python main.py --ip 127.0.0.1 --did 1234 --log DEBUG
+# → [NRC] DID=0x1234  NRC=0x31  (Request Out Of Range)
 ```
 
 ### シミュレータ対応DID
@@ -59,45 +86,106 @@ python main.py --ip 127.0.0.1 --did 9999 --log DEBUG   # NRC確認
 | 0x02 | Programming Session |
 | 0x03 | Extended Diagnostic Session |
 
+### ポート変更
+
+```bash
+python ecu_simulator.py --port 13401
+python main.py --ip 127.0.0.1 --port 13401 --did F190
+```
+
+---
+
 ## テスト実行
 
 ```bash
-# 全テスト実行
+# 全テスト（シミュレータ自動起動）
 pytest tests/ -v
 
-# ユニットテストのみ
+# 種別ごと
 pytest tests/unit/ -v
-
-# ATDDのみ
 pytest tests/atdd/ -v
-
-# 結合テスト（シミュレータ自動起動）
-pytest tests/integration/ -v
+pytest tests/integration/ -v -s   # -s でシミュレータログも表示
 ```
+
+### SID別テスト
+
+```bash
+# SID 0x22 ReadDataByIdentifier
+pytest tests/unit/test_read_data_by_identifier.py -v
+pytest tests/atdd/test_step1_read_did.py -v
+pytest tests/integration/test_integration_doip.py -v
+
+# SID 0x10 DiagnosticSessionControl
+pytest tests/unit/test_diagnostic_session_control.py -v
+pytest tests/atdd/test_step2_session.py -v -k "session"
+pytest tests/integration/test_integration_step2.py::TestIntegrationSessionControl -v
+
+# SID 0x3E TesterPresent
+pytest tests/unit/test_tester_present.py -v
+pytest tests/atdd/test_step2_session.py -v -k "tester_present"
+pytest tests/integration/test_integration_step2.py::TestIntegrationTesterPresent -v
+
+# GUI
+pytest tests/atdd/test_step3_gui.py -v
+
+# キーワード絞り込み
+pytest tests/ -v -k "session"
+pytest tests/ -v -k "rdbi or read_data"
+
+# カバレッジをファイル単位で確認
+pytest tests/ --cov=src/uds/read_data_by_identifier --cov-report=term-missing
+```
+
+---
+
+## ログ出力形式 (JSON Lines)
+
+```bash
+cat uds_log.json | jq .          # 整形表示
+cat uds_log.json | jq 'select(.direction=="TX")'       # TXのみ
+cat uds_log.json | jq 'select(.nrc != null)'           # NRC発生分のみ
+```
+
+出力例：
+
+```json
+{"direction": "TX", "sid": "0x22", "raw_hex": "22 F1 90", "event": "uds_tx", "timestamp": "2026-05-09T12:00:00Z"}
+{"direction": "RX", "sid": "0x22", "raw_hex": "62 F1 90 ...", "event": "uds_rx", "timestamp": "2026-05-09T12:00:00Z"}
+{"direction": "RX", "sid": "0x22", "raw_hex": "7F 22 31", "nrc": "0x31", "nrc_message": "Request Out Of Range", "event": "uds_rx", "timestamp": "2026-05-09T12:00:00Z"}
+```
+
+---
 
 ## アーキテクチャ
 
 ```
-[CLI (click)]
-    │
-[DiagnosticService]   ← CLI/GUIが共有するアプリケーションロジック
-    │
-[ProtocolBase]        ← Strategyパターン（DoIP/UDSonCAN切替可能）
-    │
-[DoIPProtocol]        ← doipclientライブラリをラップ
+[GUI (PySide6)]    [CLI (click)]
+       │                │
+       └────────┬────────┘
+                │
+     [DiagnosticService]      ← GUI/CLI共有ロジック
+                │
+         [ProtocolBase]       ← Strategyパターン（DoIP/UDSonCAN切替可能）
+                │
+         [DoIPProtocol]       ← doipclientライブラリをラップ
 ```
+
+---
 
 ## ディレクトリ構成
 
 ```
 uds_tool/
+├── gui_main.py                          # GUIエントリポイント
 ├── main.py                              # CLIエントリポイント
 ├── ecu_simulator.py                     # ローカルテスト用ECUシミュレータ
 ├── requirements.txt
 ├── pytest.ini
 ├── src/
 │   ├── application/
-│   │   └── diagnostic_service.py        # CLI/GUI共有ロジック
+│   │   └── diagnostic_service.py        # GUI/CLI共有ロジック
+│   ├── gui/
+│   │   └── main_window.py               # PySide6メインウィンドウ
 │   ├── uds/
 │   │   ├── service_base.py              # 共通データモデル (pydantic)
 │   │   ├── nrc.py                       # NRCコード定義・変換
@@ -110,9 +198,11 @@ uds_tool/
 │   └── logger/
 │       └── uds_logger.py                # JSON Lines形式ログ出力
 └── tests/
+    ├── conftest.py                      # テスト共通設定（ヘッドレスGUI）
     ├── atdd/
     │   ├── test_step1_read_did.py
-    │   └── test_step2_session.py
+    │   ├── test_step2_session.py
+    │   └── test_step3_gui.py
     ├── unit/
     │   ├── test_nrc.py
     │   ├── test_service_base.py
@@ -125,192 +215,14 @@ uds_tool/
         └── test_integration_step2.py    # Step2結合テスト
 ```
 
+---
+
 ## 開発ステップ
 
 - [x] Step1: CLI + DoIP + ReadDataByIdentifier (0x22)
 - [x] Step2: DiagnosticSessionControl (0x10) + TesterPresent (0x3E)
-- [ ] Step3: PyQt GUI追加
+- [x] Step3: PySide6 GUI
 - [ ] Step4: DoIP通信強化（再接続・タイムアウト）
 - [ ] Step5: 追加SID (0x11, 0x14, 0x19, 0x2E, 0x31)
 - [ ] Step6: SecurityAccess (0x27)
 - [ ] Step7: UDSonCAN対応 (ISO-TP + python-can)
-
-## ログ出力形式 (JSON Lines)
-
-```json
-{"direction": "TX", "sid": "0x10", "raw_hex": "10 03", "event": "uds_tx", "timestamp": "2026-05-09T..."}
-{"direction": "RX", "sid": "0x10", "raw_hex": "50 03 ...", "event": "uds_rx", "timestamp": "2026-05-09T..."}
-{"direction": "TX", "sid": "0x22", "raw_hex": "22 F1 90", "event": "uds_tx", "timestamp": "2026-05-09T..."}
-{"direction": "RX", "sid": "0x22", "raw_hex": "62 F1 90 ...", "event": "uds_rx", "timestamp": "2026-05-09T..."}
-```
-
-## SID別テスト実行コマンド
-
-### SID 0x22 ReadDataByIdentifier
-
-```bash
-# ユニットテスト
-pytest tests/unit/test_read_data_by_identifier.py -v
-
-# ATDDテスト
-pytest tests/atdd/test_step1_read_did.py -v
-
-# 結合テスト
-pytest tests/integration/test_integration_doip.py -v
-```
-
-### SID 0x10 DiagnosticSessionControl
-
-```bash
-# ユニットテスト
-pytest tests/unit/test_diagnostic_session_control.py -v
-
-# ATDDテスト
-pytest tests/atdd/test_step2_session.py -v -k "session"
-
-# 結合テスト
-pytest tests/integration/test_integration_step2.py::TestIntegrationSessionControl -v
-```
-
-### SID 0x3E TesterPresent
-
-```bash
-# ユニットテスト
-pytest tests/unit/test_tester_present.py -v
-
-# ATDDテスト
-pytest tests/atdd/test_step2_session.py -v -k "tester_present"
-
-# 結合テスト
-pytest tests/integration/test_integration_step2.py::TestIntegrationTesterPresent -v
-```
-
-### シナリオ連結テスト（セッション遷移 → RDBI）
-
-```bash
-pytest tests/atdd/test_step2_session.py::TestStep2AcceptanceSession::test_session_then_rdbi -v
-pytest tests/integration/test_integration_step2.py::TestIntegrationSessionThenRdbi -v
-```
-
-### その他
-
-```bash
-# キーワードでまとめて絞り込む
-pytest tests/ -v -k "session"
-pytest tests/ -v -k "tester"
-pytest tests/ -v -k "rdbi or read_data"
-
-# カバレッジをSIDファイル単位で確認
-pytest tests/ --cov=src/uds/read_data_by_identifier --cov-report=term-missing
-pytest tests/ --cov=src/uds/diagnostic_session_control --cov-report=term-missing
-pytest tests/ --cov=src/uds/tester_present --cov-report=term-missing
-```
-
-## ECUシミュレータを使った手動テスト手順
-
-### 1. シミュレータ起動
-
-```bash
-# ターミナル1
-python ecu_simulator.py
-```
-
-起動すると以下が表示されます。
-
-```
-[SIM] Listening on 127.0.0.1:13400  logical_addr=0x1000
-[SIM] DIDs: 0xf190, 0xf18c, 0xf186
-[SIM] Sessions: 0x1, 0x2, 0x3
-[SIM] Ctrl+C to stop
-```
-
----
-
-### 2. CLIから接続してSIDを実行
-
-別ターミナルで以下を実行します。
-
-```bash
-# ターミナル2
-```
-
-#### SID 0x22 ReadDataByIdentifier
-
-```bash
-# VIN読み取り（正常応答）
-python main.py --ip 127.0.0.1 --did F190 --log DEBUG
-# → [OK]  DID=0xf190  Data=53 49 4D 56 49 4E 30 30 30 30 30 30 30 30 30 31
-
-# ECU Serial Number
-python main.py --ip 127.0.0.1 --did F18C --log DEBUG
-# → [OK]  DID=0xf18c  Data=53 4E 2D 45 43 55 2D 30 30 34 32
-
-# 存在しないDID（NRC確認）
-python main.py --ip 127.0.0.1 --did 1234 --log DEBUG
-# → [NRC] DID=0x1234  NRC=0x31  (Request Out Of Range)
-```
-
----
-
-### 3. シミュレータ側のログ確認
-
-シミュレータのターミナルには通信内容がリアルタイムで表示されます。
-
-```
-[SIM] Connected: ('127.0.0.1', 52001)
-[SIM] RX type=0x5 payload=0E 00 00 00 00 00 00     ← RoutingActivationRequest
-[SIM] TX RoutingActivationResponse OK client=0xe00
-[SIM] RX type=0x8001 payload=0E 00 10 00 22 F1 90  ← ReadDataByIdentifier
-[SIM] TX DiagnosticResponse: 62 F1 90 53 49 4D ...
-[SIM] Disconnected: ('127.0.0.1', 52001)
-```
-
----
-
-### 4. ログファイルの確認
-
-```bash
-# 通信ログをJSON Lines形式で確認
-cat uds_log.json
-
-# jqで整形表示（jqインストール済みの場合）
-cat uds_log.json | jq .
-
-# TXのみ抽出
-cat uds_log.json | jq 'select(.direction=="TX")'
-
-# NRCが発生したエントリのみ抽出
-cat uds_log.json | jq 'select(.nrc != null)'
-```
-
----
-
-### 5. pytestによる自動テスト（シミュレータ自動起動）
-
-手動でシミュレータを起動する必要はありません。  
-pytest実行時にシミュレータがテスト内部で自動起動・停止します。
-
-```bash
-# 全テスト（シミュレータ自動起動）
-pytest tests/ -v
-
-# 結合テストのみ
-pytest tests/integration/ -v
-
-# シミュレータのログも表示したい場合
-pytest tests/integration/ -v -s
-```
-
----
-
-### 6. シミュレータのポート変更
-
-デフォルト（13400）が使用中の場合はポートを変更できます。
-
-```bash
-# シミュレータを別ポートで起動
-python ecu_simulator.py --port 13401
-
-# CLIも同じポートを指定
-python main.py --ip 127.0.0.1 --port 13401 --did F190
-```
