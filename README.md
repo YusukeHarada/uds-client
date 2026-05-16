@@ -24,7 +24,11 @@ TDD + ATDDで段階的に開発するUDS診断ツールです。
 ## セットアップ
 
 ```bash
-pip install -r requirements.txt
+# 本番依存のみインストール
+pip install .
+
+# 開発・テスト用依存も含めてインストール
+pip install -e ".[dev]"
 ```
 
 ---
